@@ -9,21 +9,21 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
 
-## Configuration
+## Konfiguration
 
 ```bash
 cp .env.template .env
-# Fill in CCU3_HOST, CCU3_USER, CCU3_PASSWORD
+# CCU3_HOST, CCU3_USER, CCU3_PASSWORD eintragen
 ```
 
-## Usage
+## Verwendung
 
 ```
-.venv/bin/python xls2ccu3.py <source> [--dry-run] [--room ROOM]
+.venv/bin/python xls2ccu3.py <quelle> [--dry-run] [--room RAUM]
 
-<source>    Path to .xlsx file or public Google Drive share link
---dry-run   Show diff only, write nothing
---room      Process a single room only (sheet name)
+<quelle>    Pfad zu .xlsx-Datei oder öffentlicher Google-Drive-Freigabelink
+--dry-run   Nur Diff anzeigen, nichts schreiben
+--room      Nur einen einzelnen Raum verarbeiten (Sheet-Name)
 ```
 
 ## XLSX-Format
@@ -39,5 +39,5 @@ Eine Datei mit **einem Sheet pro Raum** (Sheet-Name = Raum-Alias auf der CCU3).
 | 22:00 | 24:00 | 17 | 17 | 17 | 17 | 17 | 17 | 17 |
 
 - Zeiten in 10-Minuten-Schritten, lückenlos von 00:00 bis 24:00
-- Temperaturen in 0.5°C-Schritten (4.5 = Off, 30.5 = On)
+- Temperaturen in 0.5°C-Schritten (4.5 = Aus, 30.5 = An)
 - Max. 13 Zeilen pro Tag (Hardware-Limit des BWTH)
