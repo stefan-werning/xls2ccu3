@@ -1,20 +1,32 @@
-import requests
+import xmlrpc.client
 
 from .parser import DAYS, MAX_SLOTS
 
-DAY_INDEX = {day: i + 1 for i, day in enumerate(DAYS)}  # Mo=1 .. So=7
+XMLRPC_PORT = 2010
+
+DAY_NAMES = {
+    "Mo": "MONDAY",
+    "Di": "TUESDAY",
+    "Mi": "WEDNESDAY",
+    "Do": "THURSDAY",
+    "Fr": "FRIDAY",
+    "Sa": "SATURDAY",
+    "So": "SUNDAY",
+}
 
 
 class CCU3Client:
     def __init__(self, host: str, port: int = 8181, user: str = "", password: str = ""):
-        self.base_url = f"http://{host}:{port}"
-        self.auth = (user, password) if user else None
+        self._rega_base = f"http://{host}:{port}"
+        auth = f"{user}:{password}@" if user else ""
+        self._rpc = xmlrpc.client.ServerProxy(f"http://{auth}{host}:{XMLRPC_PORT}/")
 
-    def _rega_script(self, script: str) -> str:
+    def _rega(self, script: str) -> str:
+        import requests
+        oneliner = " ".join(line.strip() for line in script.splitlines() if line.strip())
         resp = requests.post(
-            f"{self.base_url}/tclrega.exe",
-            data=script.encode("utf-8"),
-            auth=self.auth,
+            f"{self._rega_base}/tclrega.exe",
+            data=oneliner.encode("utf-8"),
             timeout=15,
         )
         resp.raise_for_status()
@@ -22,83 +34,72 @@ class CCU3Client:
 
     def find_bwth_devices(self) -> dict[str, str]:
         """Return {room_name: channel_address} for all HmIP-BWTH channel 1 devices."""
-        script = """
-string sRoomID; string sDevID; string sChanID;
-foreach(sRoomID, dom.GetObject(ID_ROOMS).EnumIDs()) {
-  object oRoom = dom.GetObject(sRoomID);
-  foreach(sDevID, oRoom.EnumUsedIDs()) {
-    object oDev = dom.GetObject(sDevID);
-    if(oDev.Type() == OT_DEVICE && oDev.HssType() == "HmIP-BWTH") {
-      foreach(sChanID, oDev.Channels().EnumIDs()) {
-        object oChan = dom.GetObject(sChanID);
-        if(oChan.ChnIndex() == 1) {
-          WriteLine(oRoom.Name() # "\\t" # oChan.Address());
-        }
-      }
-    }
-  }
-}
-"""
-        output = self._rega_script(script)
-        result = {}
-        for line in output.splitlines():
+        # Step 1: get BWTH device IDs via ReGaHSS
+        dev_ids = [
+            line.strip()
+            for line in self._rega(
+                'string sID; foreach(sID, dom.GetObject(ID_DEVICES).EnumIDs()) '
+                '{ object o = dom.GetObject(sID); if(o.HssType() == "HmIP-BWTH") { WriteLine(sID); } }'
+            ).splitlines()
+            if line.strip().isdigit()
+        ]
+        if not dev_ids:
+            return {}
+
+        # Step 2: per device, get all channel addresses (filter :1 in Python)
+        chan_id_to_addr: dict[str, str] = {}
+        for dev_id in dev_ids:
+            for line in self._rega(
+                f'string sID; foreach(sID, dom.GetObject({dev_id}).Channels().EnumIDs()) '
+                f'{{ object o = dom.GetObject(sID); WriteLine(sID # "\\t" # o.Address()); }}'
+            ).splitlines():
+                line = line.strip()
+                if "\t" not in line or line.startswith("<"):
+                    continue
+                chan_id, addr = line.split("\t", 1)
+                if addr.strip().endswith(":1"):
+                    chan_id_to_addr[chan_id.strip()] = addr.strip()
+
+        if not chan_id_to_addr:
+            return {}
+
+        # Step 3: map room names to channel addresses via EnumUsedIDs
+        result: dict[str, str] = {}
+        for line in self._rega(
+            'string sRoomID; foreach(sRoomID, dom.GetObject(ID_ROOMS).EnumIDs()) '
+            '{ object oRoom = dom.GetObject(sRoomID); string sUsedID; '
+            'foreach(sUsedID, oRoom.EnumUsedIDs()) { WriteLine(oRoom.Name() # "\\t" # sUsedID); } }'
+        ).splitlines():
             line = line.strip()
-            if "\t" not in line:
+            if "\t" not in line or line.startswith("<"):
                 continue
-            room, addr = line.split("\t", 1)
-            if room not in result:
-                result[room] = addr
+            room_name, used_id = line.split("\t", 1)
+            used_id = used_id.strip()
+            if used_id in chan_id_to_addr and room_name not in result:
+                result[room_name] = chan_id_to_addr[used_id]
         return result
 
     def read_schedule(self, channel_address: str) -> dict[str, list[tuple[int, float]]]:
-        """Read all 13 slots × 7 days from a BWTH channel 1.
-
-        Returns {day: [(endtime_minutes, temperature), ...]} with MAX_SLOTS entries each.
-        """
-        lines = []
-        for day_name, day_num in DAY_INDEX.items():
+        """Read P1 week schedule via XML-RPC getParamset (MASTER paramset)."""
+        params = self._rpc.getParamset(channel_address, "MASTER")
+        result: dict[str, list[tuple[int, float]]] = {}
+        for day in DAYS:
+            day_en = DAY_NAMES[day]
+            slots = []
             for n in range(1, MAX_SLOTS + 1):
-                et_dp = f"P1_ENDTIME_{day_num}_{n}"
-                temp_dp = f"P1_TEMPERATURE_{day_num}_{n}"
-                lines.append(
-                    f'object oET = dom.GetObject("{channel_address}:{et_dp}"); '
-                    f'object oT = dom.GetObject("{channel_address}:{temp_dp}"); '
-                    f'if(oET && oT) {{ WriteLine("{day_name}\\t{n}\\t" # oET.Value() # "\\t" # oT.Value()); }}'
-                )
-        script = "\n".join(lines)
-        output = self._rega_script(script)
-
-        result: dict[str, list[tuple[int, float]]] = {d: [] for d in DAYS}
-        for line in output.splitlines():
-            parts = line.strip().split("\t")
-            if len(parts) != 4:
-                continue
-            day, _n, et_str, temp_str = parts
-            try:
-                endtime = int(float(et_str))
-                temp = float(temp_str)
-            except ValueError:
-                continue
-            if day in result:
-                result[day].append((endtime, temp))
-
+                et = params.get(f"P1_ENDTIME_{day_en}_{n}")
+                temp = params.get(f"P1_TEMPERATURE_{day_en}_{n}")
+                if et is None or temp is None:
+                    break
+                slots.append((int(et), float(temp)))
+            result[day] = slots
         return result
 
     def write_day(self, channel_address: str, day: str, slots: list[tuple[int, float]]) -> None:
-        """Write all MAX_SLOTS entries for one day in a single ReGaHSS batch."""
-        day_num = DAY_INDEX[day]
-        lines = []
+        """Write all MAX_SLOTS entries for one day via XML-RPC putParamset."""
+        day_en = DAY_NAMES[day]
+        params = {}
         for n, (endtime, temp) in enumerate(slots, start=1):
-            et_dp = f"P1_ENDTIME_{day_num}_{n}"
-            temp_dp = f"P1_TEMPERATURE_{day_num}_{n}"
-            lines.append(
-                f'dom.GetObject("{channel_address}:{et_dp}").State({endtime});'
-                f'dom.GetObject("{channel_address}:{temp_dp}").State({temp:.1f});'
-            )
-        # Trigger a save by toggling ACTIVE_PROFILE — workaround to flush to device
-        lines.append(
-            f'object oChan = dom.GetObject("{channel_address}"); '
-            f'if(oChan) {{ oChan.DPByAddress("P1_SCHEDULE_PROFILE_INDEX").SetValue(1); }}'
-        )
-        script = "\n".join(lines)
-        self._rega_script(script)
+            params[f"P1_ENDTIME_{day_en}_{n}"] = endtime
+            params[f"P1_TEMPERATURE_{day_en}_{n}"] = temp
+        self._rpc.putParamset(channel_address, "MASTER", params)

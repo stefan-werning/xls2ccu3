@@ -21,13 +21,18 @@ class RoomSchedule:
 
 
 def _parse_time(value) -> int:
-    """Parse HH:MM string or Excel time float to minutes since midnight."""
+    """Parse HH:MM string, Excel time float, or datetime.time/datetime to minutes since midnight."""
+    import datetime
     if isinstance(value, str):
         h, m = value.strip().split(":")
         return int(h) * 60 + int(m)
     if isinstance(value, float):
         total = round(value * MINUTES_PER_DAY)
         return total % MINUTES_PER_DAY or MINUTES_PER_DAY
+    if isinstance(value, datetime.datetime):
+        return value.hour * 60 + value.minute
+    if isinstance(value, datetime.time):
+        return value.hour * 60 + value.minute
     raise ValueError(f"Cannot parse time: {value!r}")
 
 

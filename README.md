@@ -5,7 +5,8 @@ Liest Heizprofile aus einer XLSX-Datei und setzt sie auf HmIP-BWTH Geräten eine
 ## Installation
 
 ```bash
-pip install -r requirements.txt
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
 ```
 
 ## Configuration
@@ -18,7 +19,7 @@ cp .env.template .env
 ## Usage
 
 ```
-python xls2ccu3.py <source> [--dry-run] [--room ROOM]
+.venv/bin/python xls2ccu3.py <source> [--dry-run] [--room ROOM]
 
 <source>    Path to .xlsx file or public Google Drive share link
 --dry-run   Show diff only, write nothing

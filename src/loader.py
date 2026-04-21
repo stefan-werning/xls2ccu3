@@ -7,7 +7,7 @@ import requests
 
 def load_source(source: str) -> Path:
     """Return a local path to the XLSX file, downloading from Google Drive if needed."""
-    if "drive.google.com" in source:
+    if "drive.google.com" in source or "docs.google.com" in source:
         return _download_google_drive(source)
     path = Path(source)
     if not path.exists():
@@ -16,8 +16,8 @@ def load_source(source: str) -> Path:
 
 
 def _extract_file_id(url: str) -> str:
-    # Handles /file/d/<id>/view and ?id=<id> formats
-    match = re.search(r"/file/d/([a-zA-Z0-9_-]+)", url)
+    # Handles /file/d/<id>/, /spreadsheets/d/<id>/, and ?id=<id> formats
+    match = re.search(r"/(?:file|spreadsheets)/d/([a-zA-Z0-9_-]+)", url)
     if match:
         return match.group(1)
     match = re.search(r"[?&]id=([a-zA-Z0-9_-]+)", url)
