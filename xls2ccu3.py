@@ -6,9 +6,9 @@ import sys
 from dotenv import load_dotenv
 
 from src.ccu3 import CCU3Client
-from src.diff import compute_diffs
+from src.diff import compute_diffs, effective_slots
 from src.loader import load_source
-from src.parser import parse_xlsx
+from src.parser import parse_xlsx, MAX_SLOTS
 
 
 def main():
@@ -88,12 +88,16 @@ def main():
 
         for day, slots in diffs.items():
             if args.dry_run:
-                current_slots = current.get(day, [])
-                print(f"  {day}: would update ({len(slots)} slots)")
-                for i, (et, temp) in enumerate(slots):
-                    c_et, c_temp = current_slots[i] if i < len(current_slots) else (None, None)
-                    marker = " *" if (et != c_et or (c_temp is not None and abs(temp - c_temp) >= 0.25)) else ""
+                target_eff = effective_slots(slots)
+                current_eff = effective_slots(current.get(day, []))
+                print(f"  {day}: would update ({len(target_eff)} active slots)")
+                for i, (et, temp) in enumerate(target_eff):
+                    c_et, c_temp = current_eff[i] if i < len(current_eff) else (None, None)
+                    marker = " *" if (et != c_et or c_temp is None or abs(temp - c_temp) >= 0.25) else ""
                     print(f"    slot {i+1:2d}: {et:4d}min  {temp:.1f}°C{marker}")
+                unused = MAX_SLOTS - len(target_eff)
+                if unused > 0:
+                    print(f"    (+ {unused} unused slots)")
             else:
                 try:
                     ccu.write_day(channel_addr, day, slots)

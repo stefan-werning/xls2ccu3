@@ -10,17 +10,28 @@ def normalize(schedule: DaySchedule) -> list[tuple[int, float]]:
     return slots
 
 
+def effective_slots(slots: list[tuple[int, float]]) -> list[tuple[int, float]]:
+    """Return the active slots: up to and including the first endtime==1440.
+    Everything after that is considered unused by the BWTH."""
+    out: list[tuple[int, float]] = []
+    for et, temp in slots:
+        out.append((et, temp))
+        if et >= MINUTES_PER_DAY:
+            break
+    return out
+
+
 def diff_day(
     target: DaySchedule, current: list[tuple[int, float]]
 ) -> list[tuple[int, float]] | None:
-    """Return normalized target slots if they differ from current, else None."""
-    norm_target = normalize(target)
-    # current already has MAX_SLOTS entries from CCU3 read
-    if len(current) != MAX_SLOTS:
-        return norm_target
-    for (et, temp), (cet, ctemp) in zip(norm_target, current):
+    """Return normalized target slots if the effective programming differs."""
+    target_eff = effective_slots(target.slots)
+    current_eff = effective_slots(current)
+    if len(target_eff) != len(current_eff):
+        return normalize(target)
+    for (et, temp), (cet, ctemp) in zip(target_eff, current_eff):
         if et != cet or abs(temp - ctemp) >= 0.25:
-            return norm_target
+            return normalize(target)
     return None
 
 
