@@ -2,11 +2,10 @@
 
 Liest Heizprofile aus einer XLSX-Datei und setzt sie auf HmIP-BWTH Geräten einer HomeMatic CCU3 — nur bei tatsächlichen Änderungen, um unnötiges Blinken zu vermeiden.
 
-## Installation
+## Installation (Ubuntu)
 
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+sudo apt install python3-dotenv python3-openpyxl python3-requests
 ```
 
 ## Konfiguration
@@ -19,7 +18,7 @@ cp .env.template .env
 ## Verwendung
 
 ```
-.venv/bin/python xls2ccu3.py <quelle> [--dry-run] [--room RAUM]
+python3 xls2ccu3.py <quelle> [--dry-run] [--room RAUM]
 
 <quelle>    Pfad zu .xlsx-Datei oder öffentlicher Google-Drive-Freigabelink
 --dry-run   Nur Diff anzeigen, nichts schreiben

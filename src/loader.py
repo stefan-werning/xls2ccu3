@@ -28,7 +28,10 @@ def _extract_file_id(url: str) -> str:
 
 def _download_google_drive(url: str) -> Path:
     file_id = _extract_file_id(url)
-    download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+    if "spreadsheets" in url:
+        download_url = f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=xlsx"
+    else:
+        download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
     response = requests.get(download_url, timeout=30)
     response.raise_for_status()
     tmp = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
