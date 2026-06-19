@@ -57,6 +57,7 @@ flutter_app/
 
 ### SyncScreen (Hauptbildschirm)
 - Großer **„Sync starten"**-Button
+- Toggle-Switch **„Dry Run"** (Default: aus) — wenn aktiv, wird nichts geschrieben, nur der Diff geloggt
 - ScrollView mit Live-Log (wird während des Syncs Zeile für Zeile befüllt)
 - Kleines Zahnrad-Icon oben rechts → Settings
 - Statusanzeige: Erfolg / Fehler am Ende
@@ -132,14 +133,15 @@ Methoden:
 ### sync_service.dart
 Orchestriert die Pipeline und gibt Fortschritt über einen `Stream<String>` aus (für Live-Log im UI):
 ```dart
-Stream<String> runSync(SyncConfig config) async* {
+Stream<String> runSync(SyncConfig config, {bool dryRun = false}) async* {
     yield "Lade Tabelle von Google Drive...";
     final bytes = await loader.download(config.driveUrl);
     yield "Parse XLSX...";
     final rooms = xlsxParser.parse(bytes);
     yield "Verbinde mit CCU3 ${config.host}...";
     final deviceMap = await ccu3.findBwthDevices();
-    // pro Raum: lesen → diff → schreiben
+    // pro Raum: lesen → diff → schreiben (oder bei dryRun: nur loggen)
+    if (dryRun) yield "  [dry-run] würde N Slots schreiben";
     yield "Fertig.";
 }
 ```
@@ -173,7 +175,6 @@ Stream<String> runSync(SyncConfig config) async* {
 
 ## Out of Scope (MVP)
 
-- Dry-Run-Modus
 - Einzelner Raum (–room Filter)
 - iOS (funktioniert technisch, ungetestet)
 - Hintergrund-Sync / Scheduler
