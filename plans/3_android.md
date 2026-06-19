@@ -183,8 +183,10 @@ Stream<String> runSync(SyncConfig config, {bool dryRun = false}) async* {
 
 ---
 
-## Offene Fragen
+## Entscheidungen
 
-1. Soll die App auch funktionieren wenn das Handy **nicht im Heimnetz** ist (VPN)? → kein Einfluss auf die App selbst, aber Voraussetzung für den User
-2. Google-Drive-Link — öffentlich freigegeben oder privat? → bei privat: OAuth nötig (deutlich mehr Aufwand)
-3. Soll der Google-Drive-Link fest in Settings gespeichert sein, oder auch über QR-Code / Teilen-Dialog übergeben werden können?
+| Frage | Antwort |
+|---|---|
+| Netzwerk | Nur im Heimnetz (WLAN) — kein VPN, kein Internet-Zugriff auf CCU3 nötig |
+| Google-Drive-Zugriff | Öffentlicher Link — kein OAuth, direkter HTTP-Download |
+| Link-Eingabe | Einmalig in Settings eintragen und speichern |
